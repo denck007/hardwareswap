@@ -3,15 +3,22 @@ import datetime
 import json
 import pandas as pd
 import pytz
+import re
 import tqdm
+from sqlalchemy.sql.schema import ForeignKey
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean
+from sqlalchemy.orm import relation, relationship
 from HardwareSwap.Models.database import Base
 from HardwareSwap.Models.tools import get_or_create
+from HardwareSwap.DownloadData.download_data import remove_duplicate_rows
 
 class Post(Base):
     __tablename__="post"
 
     id = Column(String, primary_key=True)
+    deleted = Column(Boolean, default=False, nullable=False)
+    post_type_id = Column(Integer, ForeignKey("post_type.id"))
+    post_type = relationship("PostType", back_populates="posts")
 
     all_awardings = Column(String)
     allow_live_comments = Column(Boolean)
@@ -167,6 +174,9 @@ class Post(Base):
         """
         Generates instances then adds them all to the database at once.
         """
+        existing_ids = [idx[0] for idx in session.query(Post.id).all()]
+        df = remove_duplicate_rows(df, "id", additional=existing_ids)
+
         data = []
         for idx in tqdm.tqdm(range(len(df))):
             data.append( Post.clean_raw_data(raw=df.iloc[idx].to_dict()) )
@@ -174,3 +184,85 @@ class Post(Base):
         session.bulk_insert_mappings(Post,data)
         session.commit()
         print(f" Done!")
+
+
+    @classmethod
+    def clean(cls, session):
+        cls._mark_deleted(session)
+        cls._set_post_type_by_link_flair(session)
+        cls._set_post_type_by_parsing_title(session)
+        
+    
+    @classmethod
+    def _mark_deleted(cls, session):
+        """
+        Flag every item in the database that is not 
+        """
+        n_author_deleted = session.query(Post).filter(Post.deleted==False, Post.author=="[deleted]").update({"deleted":True})
+        n_post_deleted = session.query(Post).filter(Post.deleted==False, Post.selftext=="[deleted]").update({"deleted":True})
+        n_post_removed = session.query(Post).filter(Post.deleted==False, Post.selftext=="[removed]").update({"deleted":True})
+        session.commit()
+
+
+    @classmethod
+    def _set_post_type_by_link_flair(cls, session):
+        """
+        Update the post_type for every Post
+        """
+        from HardwareSwap.Models import PostType
+        for pt in session.query(PostType).all():
+            mappings = []
+            for item in session.query(Post.id).filter(Post.deleted==False, Post.link_flair_text.ilike(pt.post_type)):
+                mappings.append({"id":item[0], "post_type_id":pt.id})
+            session.bulk_update_mappings(Post, mappings)
+        session.commit()
+    
+
+    @classmethod
+    def _set_post_type_by_parsing_title(cls, session):
+        """
+        Use some really simple hueristics to determine what post type is
+        """
+        from HardwareSwap.Models import PostType
+        post_type_ids = {}
+        for pt in session.query(PostType).all():
+            post_type_ids[pt.post_type] = pt.id
+        
+        mapping = []
+        title_regex = get_regex_to_parse_title()
+        query = session.query(Post.id, Post.title).filter(Post.deleted==False, Post.post_type==None)
+        for post_id, title in query.all():
+            result = title_regex.match(title)
+            if result is None:
+                continue
+            result = result.groups()
+            if len(result) != 3:
+                continue
+            else:
+                _, have, want = result
+                have_clean = have.lower().replace(" ","")
+                want_clean = want.lower().replace(" ","")
+                
+                sell = ("paypal" in have_clean) or ("cash" in have_clean) or ("$" in have_clean)
+                buy = ("paypal" in want_clean) or ("cash" in want_clean) or ("$" in want_clean)
+                trade = "trade" in want_clean
+                if sell and not buy:
+                    mapping.append({"id":post_id, "post_type_id": post_type_ids["selling"]})
+                elif buy and not sell:
+                    mapping.append({"id":post_id, "post_type_id": post_type_ids["buying"]})
+                elif trade:
+                    mapping.append({"id":post_id, "post_type_id": post_type_ids["trading"]})
+                elif ("free" in want_clean) and ("sync" not in want_clean):
+                    mapping.append({"id":post_id, "post_type_id": post_type_ids["giveaway"]})
+
+        session.bulk_update_mappings(Post, mapping)
+        session.commit()
+
+
+def get_regex_to_parse_title():
+    """
+    Returns a compiled regex that parses the title of a post into 3 groups: location, have, want
+    """
+    
+    f = re.compile("\[\s*(.+)\s*\]\s*\[\s*H\s*\]\s*(.+?)\s*\[\s*W\s*\]\s*(.*)")
+    return f
