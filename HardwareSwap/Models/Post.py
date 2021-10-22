@@ -122,7 +122,7 @@ class Post(Base):
 
 
     @classmethod
-    def clean_raw_data(cls, raw):
+    def clean_raw_data(cls, raw:dict) -> dict:
         """
         Convert a dictionary of raw values to a clean set that can be used  to create an instance
         """
