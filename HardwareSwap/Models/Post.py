@@ -228,6 +228,7 @@ class Post(Base):
     def _set_post_type_by_parsing_title(cls, session):
         """
         Use some really simple hueristics to determine what post type is
+            when the link flair isn't clear (ie when it is 'closed' or not defined)
         """
         from HardwareSwap.Models import PostType
         post_type_ids = {}
@@ -235,7 +236,7 @@ class Post(Base):
             post_type_ids[pt.post_type] = pt.id
         
         mapping = []
-        query = session.query(Post.id, Post.have, Post.want).filter(Post.deleted==False, Post.have!=None, Post.want!=None, Post.post_type_id!=None)
+        query = session.query(Post.id, Post.have, Post.want).filter(Post.deleted==False, Post.have!=None, Post.want!=None, Post.post_type_id==None)
         for post_id, have, want in query.all():
             have_clean = have.lower().replace(" ","")
             want_clean = want.lower().replace(" ","")
