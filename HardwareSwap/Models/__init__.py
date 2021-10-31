@@ -9,3 +9,5 @@ from HardwareSwap.Models.Series import Series
 from HardwareSwap.Models.Manufacturer import Manufacturer
 
 from HardwareSwap.Models.PostMappings import PostBrand, PostManufacturer, PostSeries
+
+from HardwareSwap.Models.Item import Item, ItemType

@@ -1,0 +1,7 @@
+alembic
+numpy
+matplotlib
+pandas
+sqlalchemy
+streamlit
+tqdm

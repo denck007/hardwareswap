@@ -39,7 +39,7 @@ class Post(Base):
     awarders = Column(String)
     can_mod_post = Column(Boolean)
     contest_mode = Column(Boolean)
-    created_utc = Column(DateTime)
+    created_utc = Column(DateTime, index=True)
     domain = Column(String)
     full_link = Column(String)
     gildings = Column(String)
