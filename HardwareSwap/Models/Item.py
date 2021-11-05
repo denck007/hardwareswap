@@ -7,9 +7,11 @@ from HardwareSwap.Models.tools import get_or_create
 
 class Item(Base):
     __tablename__ = "item"
+    __table_args__ = (Index('ix_Item_postid_postdate_number_variant_edition_price', "post_id", "number", "variant", "edition", "price", "post_date"), )
 
     id = Column(Integer, primary_key=True)
     post_id = Column(Integer, ForeignKey("post.id"), nullable=False)
+    post_date = Column(DateTime)
 
     item_type_id = Column(Integer, ForeignKey("item_type.id"), index=True, nullable=False)
     item_type = relationship("ItemType", back_populates="items")

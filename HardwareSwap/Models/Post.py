@@ -6,7 +6,7 @@ import pytz
 import re
 import tqdm
 import sys
-from sqlalchemy.sql.schema import ForeignKey
+from sqlalchemy.sql.schema import ForeignKey, Index
 from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean
 from sqlalchemy.orm import relation, relationship
 from HardwareSwap.Models.database import Base
